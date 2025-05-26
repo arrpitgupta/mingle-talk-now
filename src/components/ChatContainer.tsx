@@ -1,26 +1,120 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ChatSidebar from './ChatSidebar';
 import MessageArea from './MessageArea';
 import ProfileSection from './ProfileSection';
+import UserList from './UserList';
 import { Button } from '@/components/ui/button';
 import { MessageCircle, Menu, X } from 'lucide-react';
+import { socketService } from '@/lib/socket';
+import { ChatMessage } from '@/lib/types';
+import { User } from '@/services/users';
+
+interface Chat {
+  id: string;
+  name: string;
+  type: 'private' | 'group';
+  lastMessage?: string;
+  timestamp?: string;
+  unread?: number;
+}
+
+interface Message {
+  id: number;
+  text: string;
+  user: string;
+  timestamp: string;
+  isOwn: boolean;
+}
 
 const ChatContainer = ({ user: initialUser, onLogout }) => {
-  const [user, setUser] = useState(initialUser);
-  const [selectedChat, setSelectedChat] = useState(null);
-  const [messages, setMessages] = useState([]);
+  const [user, setUser] = useState<User>(initialUser);
+  const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [showProfile, setShowProfile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [chatRooms, setChatRooms] = useState<Chat[]>([]);
 
-  // Mock chat rooms
-  const chatRooms = [
-    { id: 1, name: 'General', lastMessage: 'Hey everyone!', timestamp: '2:30 PM', unread: 2 },
-    { id: 2, name: 'Tech Talk', lastMessage: 'React is awesome', timestamp: '1:45 PM', unread: 0 },
-    { id: 3, name: 'Random', lastMessage: 'Good morning!', timestamp: '9:15 AM', unread: 5 },
-    { id: 4, name: 'Design', lastMessage: 'New mockups ready', timestamp: 'Yesterday', unread: 1 },
-    { id: 5, name: 'Gaming', lastMessage: 'Anyone up for a match?', timestamp: 'Yesterday', unread: 3 },
-  ];
+  // Connect to socket when component mounts
+  useEffect(() => {
+    socketService.connect();
+
+    // Initialize chat rooms
+    const initialChatRooms: Chat[] = [
+      {
+        id: 'general',
+        name: 'General',
+        type: 'group',
+        lastMessage: 'Welcome to the general chat!',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ];
+    setChatRooms(initialChatRooms);
+
+    // Cleanup on unmount
+    return () => {
+      socketService.disconnect();
+    };
+  }, []);
+
+  // Handle incoming messages
+  useEffect(() => {
+    const handleNewMessage = (message: ChatMessage) => {
+      if (message.roomId === selectedChat?.id) {
+        const newMessage = {
+          id: Date.now(),
+          text: message.content,
+          user: message.sender,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isOwn: message.sender === user.username
+        };
+        setMessages(prev => [...prev, newMessage]);
+
+        // Update chat room's last message
+        setChatRooms(prev => prev.map(room => 
+          room.id === message.roomId 
+            ? { ...room, lastMessage: message.content, timestamp: newMessage.timestamp }
+            : room
+        ));
+      }
+    };
+
+    const handlePrivateMessage = (message: ChatMessage) => {
+      if (message.roomId === selectedChat?.id) {
+        const newMessage = {
+          id: Date.now(),
+          text: message.content,
+          user: message.sender,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isOwn: message.sender === user.username
+        };
+        setMessages(prev => [...prev, newMessage]);
+
+        // Update chat room's last message
+        setChatRooms(prev => prev.map(room => 
+          room.id === message.roomId 
+            ? { ...room, lastMessage: message.content, timestamp: newMessage.timestamp }
+            : room
+        ));
+      }
+    };
+
+    socketService.onMessage(handleNewMessage);
+    socketService.onPrivateMessage(handlePrivateMessage);
+
+    return () => {
+      socketService.offMessage(handleNewMessage);
+      socketService.offPrivateMessage(handlePrivateMessage);
+    };
+  }, [selectedChat, user.username]);
+
+  // Join room when chat is selected
+  useEffect(() => {
+    if (selectedChat) {
+      socketService.joinRoom(selectedChat.id);
+      // Clear messages when switching chats
+      setMessages([]);
+    }
+  }, [selectedChat]);
 
   const handleSendMessage = (messageText) => {
     if (messageText.trim() && selectedChat) {
@@ -31,12 +125,39 @@ const ChatContainer = ({ user: initialUser, onLogout }) => {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isOwn: true
       };
-      setMessages([...messages, newMessage]);
+      setMessages(prev => [...prev, newMessage]);
+
+      // Update chat room's last message
+      setChatRooms(prev => prev.map(room => 
+        room.id === selectedChat.id 
+          ? { ...room, lastMessage: messageText, timestamp: newMessage.timestamp }
+          : room
+      ));
+
+      // Send message through socket
+      if (selectedChat.type === 'private') {
+        socketService.sendPrivateMessage({
+          roomId: selectedChat.id,
+          sender: user.username,
+          content: messageText
+        });
+      } else {
+        socketService.sendMessage({
+          roomId: selectedChat.id,
+          sender: user.username,
+          content: messageText
+        });
+      }
     }
   };
 
   const handleUpdateProfile = (profileData) => {
     setUser(profileData);
+  };
+
+  const handleSelectChat = (chat: Chat) => {
+    setSelectedChat(chat);
+    setSidebarOpen(false);
   };
 
   return (
@@ -85,16 +206,19 @@ const ChatContainer = ({ user: initialUser, onLogout }) => {
         transition-transform duration-300 ease-in-out
         w-80 lg:w-80 h-full
       `}>
-        <ChatSidebar 
-          chatRooms={chatRooms}
-          selectedChat={selectedChat}
-          onSelectChat={(chat) => {
-            setSelectedChat(chat);
-            setSidebarOpen(false); // Close sidebar on mobile when chat is selected
-          }}
-          currentUser={user}
-          onOpenProfile={() => setShowProfile(true)}
-        />
+        <div className="h-full flex flex-col">
+          <UserList 
+            currentUser={user}
+            onSelectChat={handleSelectChat}
+          />
+          <ChatSidebar 
+            chatRooms={chatRooms}
+            selectedChat={selectedChat}
+            onSelectChat={handleSelectChat}
+            currentUser={user}
+            onOpenProfile={() => setShowProfile(true)}
+          />
+        </div>
       </div>
 
       {/* Main Content */}
