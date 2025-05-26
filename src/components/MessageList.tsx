@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 const MessageList = ({ messages, currentUser }) => {
   const messagesEndRef = useRef(null);
@@ -41,23 +41,23 @@ const MessageList = ({ messages, currentUser }) => {
   }, [allMessages]);
 
   return (
-    <ScrollArea className="flex-1 p-4">
-      <div className="space-y-4">
+    <ScrollArea className="flex-1 p-3 lg:p-4">
+      <div className="space-y-3 lg:space-y-4">
         {allMessages.map((message) => (
           <div
             key={message.id}
             className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'} animate-fadeInUp`}
           >
-            <div className={`flex items-start space-x-3 max-w-xs lg:max-w-md ${message.isOwn ? 'flex-row-reverse space-x-reverse' : ''}`}>
+            <div className={`flex items-start space-x-2 lg:space-x-3 max-w-[85%] sm:max-w-xs lg:max-w-md ${message.isOwn ? 'flex-row-reverse space-x-reverse' : ''}`}>
               {!message.isOwn && (
-                <Avatar className="h-8 w-8 ring-2 ring-white/20">
-                  <AvatarFallback className="bg-gradient-to-r from-blue-500 to-teal-500 text-white text-sm">
+                <Avatar className="h-6 w-6 lg:h-8 lg:w-8 ring-2 ring-white/20 flex-shrink-0">
+                  <AvatarFallback className="bg-gradient-to-r from-blue-500 to-teal-500 text-white text-xs lg:text-sm">
                     {message.user.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
               )}
               
-              <div className={`rounded-2xl px-4 py-2 shadow-lg ${
+              <div className={`rounded-2xl px-3 lg:px-4 py-2 shadow-lg ${
                 message.isOwn 
                   ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
                   : 'bg-white/10 backdrop-blur-md text-white border border-white/20'
@@ -65,7 +65,7 @@ const MessageList = ({ messages, currentUser }) => {
                 {!message.isOwn && (
                   <p className="text-xs text-gray-300 mb-1 font-medium">{message.user}</p>
                 )}
-                <p className="text-sm leading-relaxed">{message.text}</p>
+                <p className="text-sm leading-relaxed break-words">{message.text}</p>
                 <p className={`text-xs mt-1 ${message.isOwn ? 'text-purple-100' : 'text-gray-400'}`}>
                   {message.timestamp}
                 </p>
