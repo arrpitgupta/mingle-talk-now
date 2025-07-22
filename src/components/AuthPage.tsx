@@ -40,7 +40,7 @@ const AuthPage = () => {
 
     try {
       if (tab === 'login') {
-        await login(formData.username, formData.email, formData.password);
+        await login(formData.username, formData.password);
       } else {
         await register(formData.username, formData.email, formData.password);
       }
