@@ -10,8 +10,8 @@ export interface AuthResponse {
   };
 }
 
-export const login = async (email: string, password: string): Promise<AuthResponse> => {
-  const response = await api.post('/auth/login', { email, password });
+export const login = async (username: string, password: string): Promise<AuthResponse> => {
+  const response = await api.post('/auth/login', { username, password });
   const { token, user } = response.data;
   localStorage.setItem('token', token);
   localStorage.setItem('userId', user.id);
